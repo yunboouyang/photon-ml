@@ -93,8 +93,9 @@ object Utils {
    */
   def getStringAvro(record: GenericRecord, key: String, isNullOK: Boolean = false): String = {
     record.get(key) match {
-      case id@(_: Utf8 | _: JString) => id.toString
-      case number: JNumber => number.toString
+      case id: Utf8 =>  new String(id.getBytes, "utf-8")
+      case id: JString =>  new String(id.getBytes, "utf-8")
+      case number: JNumber => new String(number.toString.getBytes, "utf-8")
       case obj: JObject => throw new IllegalArgumentException(s"$key = $obj is neither a java String or Utf8")
       case _ => if (isNullOK) "" else throw new IllegalArgumentException(s"$key is null")
     }
