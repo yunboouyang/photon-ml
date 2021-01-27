@@ -545,18 +545,22 @@ object AvroUtils {
     memGradDeltaAvros: JList[IndexedNameTermValueAvro],
     featureMap: IndexMap): ApproximateHessian[Vector[Double]] = {
 
-    val memStep = memStepAvros.map(x => (x.getIndex, x.getVector)).sortWith(_._1 > _._1)
+    if (memStepAvros.isEmpty || memGradDeltaAvros.isEmpty) {
+      ApproximateHessian[Vector[Double]]()
+    } else {
+      val memStep = memStepAvros.map(x => (x.getIndex, x.getVector)).sortWith(_._1 > _._1)
 
-    val memGradDelta = memGradDeltaAvros.map(x => (x.getIndex, x.getVector)).sortWith(_._1 > _._1)
-    val m = memStep.head._1 + 1
-    var approximateHessian = ApproximateHessian[Vector[Double]](m = m)
-    for (i <- 0 until m) {
-      val memStepVec = convertNameTermValueAvroList(memStep(i)._2, featureMap)
-      val memGradDeltaVec = convertNameTermValueAvroList(memGradDelta(i)._2, featureMap)
-      approximateHessian = approximateHessian.updated(memStepVec, memGradDeltaVec)
+      val memGradDelta = memGradDeltaAvros.map(x => (x.getIndex, x.getVector)).sortWith(_._1 > _._1)
+      val m = memStep.head._1 + 1
+      var approximateHessian = ApproximateHessian[Vector[Double]](m = m)
+      for (i <- 0 until m) {
+        val memStepVec = convertNameTermValueAvroList(memStep(i)._2, featureMap)
+        val memGradDeltaVec = convertNameTermValueAvroList(memGradDelta(i)._2, featureMap)
+        approximateHessian = approximateHessian.updated(memStepVec, memGradDeltaVec)
+      }
+
+      approximateHessian
     }
-
-    approximateHessian
   }
 
   /**

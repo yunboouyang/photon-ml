@@ -19,7 +19,7 @@ import breeze.optimize.NaNHistory
 import breeze.math.MutableInnerProductModule
 
 case class ApproximateHessian[T](
-  m: Int = 3,
+  m: Int = 10,
   memStep: IndexedSeq[T] = IndexedSeq.empty,
   memGradDelta: IndexedSeq[T] = IndexedSeq.empty)(implicit space: MutableInnerProductModule[T, Double]) {
 
