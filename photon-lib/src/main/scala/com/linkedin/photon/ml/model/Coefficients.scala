@@ -31,8 +31,6 @@ import com.linkedin.photon.ml.util.{MathUtils, Summarizable, VectorUtils}
 case class Coefficients(means: Vector[Double], variances: ApproximateHessian[Vector[Double]])
   extends Summarizable {
 
-  // GAME over if variances are given but don't have the same length as the vector of means
-  require(variances.memStep.head.length == means.length, "Coefficients: Means and variances have different lengths")
 
   def length: Int = means.length
 

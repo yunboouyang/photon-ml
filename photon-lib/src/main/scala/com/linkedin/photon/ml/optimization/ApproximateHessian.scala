@@ -26,10 +26,16 @@ case class ApproximateHessian[T](
   import space._
 
   def updated(step: T, gradDelta: T): ApproximateHessian[T] = {
-    val memStep = (step +: this.memStep).take(m) // add the step in the beginning
-    val memGradDelta = (gradDelta +: this.memGradDelta).take(m)
+    val sy = step.dot(gradDelta)
+    val ss = step.dot(step)
+    if (sy.isNaN || Math.abs(sy) < 1e-8 || ss.isNaN || Math.abs(ss) < 1e-8) {
+      ApproximateHessian(m, this.memStep, this.memGradDelta)
+    } else {
+      val memStep = (step +: this.memStep).take(m)
+      val memGradDelta = (gradDelta +: this.memGradDelta).take(m)
 
-    ApproximateHessian(m, memStep, memGradDelta)
+      ApproximateHessian(m, memStep, memGradDelta)
+    }
   }
 
   def historyLength: Int = memStep.length
@@ -40,8 +46,11 @@ case class ApproximateHessian[T](
       val prevGradStep = memGradDelta.head
       val sy = prevStep.dot(prevGradStep)
       val ss = prevStep.dot(prevStep)
-      if (sy < 0 || sy.isNaN) throw new NaNHistory // this is used to get diagonal
-      sy / ss
+      if (sy < 0 || sy.isNaN) {
+        1.0
+      } else {
+        sy / ss
+      }
     } else {
       1.0
     }
@@ -51,12 +60,12 @@ case class ApproximateHessian[T](
     val rho = new Array[Double](m)
 
     for (i <- 0 until historyLength) {
-      rho(i) = memStep(i).dot(memGradDelta(i))    // compute rho_i
-      as(i) = (memGradDelta(i).dot(dir)) / rho(i)   // alpha = s_i^T r_i / rho_i
+      rho(i) = memStep(i).dot(memGradDelta(i))
+      as(i) = (memGradDelta(i).dot(dir)) / rho(i)
       if (as(i).isNaN) {
         throw new NaNHistory
       }
-      axpy(-as(i), memStep(i), dir)  // compute -alpha^T * y_i + fir
+      axpy(-as(i), memStep(i), dir)
     }
 
     dir *= diag
