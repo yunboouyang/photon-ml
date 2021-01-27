@@ -16,6 +16,7 @@ package com.linkedin.photon.ml.algorithm
 
 import com.linkedin.photon.ml.data.RandomEffectDataset
 import com.linkedin.photon.ml.model.{Coefficients, RandomEffectModel}
+import com.linkedin.photon.ml.optimization.ApproximateHessian
 
 /**
  * Trait to encapsulate [[RandomEffectModel]] projection. Needed as the random effects have their feature space
@@ -41,9 +42,15 @@ trait ModelProjection extends Coordinate[RandomEffectDataset] {
         projectorOpt
           .map { projector =>
             val oldCoefficients = model.coefficients
+            val oldVariances = oldCoefficients.variances
+            val newVariances = ApproximateHessian[breeze.linalg.Vector[Double]](
+              oldVariances.m,
+              oldVariances.memStep.map(projector.projectForward),
+              oldVariances.memGradDelta.map(projector.projectForward))
+
             val newCoefficients = Coefficients(
               projector.projectForward(oldCoefficients.means),
-              oldCoefficients.variancesOption.map(projector.projectForward))
+              newVariances)
 
             model.updateCoefficients(newCoefficients)
           }
@@ -71,9 +78,15 @@ trait ModelProjection extends Coordinate[RandomEffectDataset] {
         projectorOpt
           .map { projector =>
             val oldCoefficients = model.coefficients
+
+            val oldVariances = oldCoefficients.variances
+            val newVariances = ApproximateHessian[breeze.linalg.Vector[Double]](
+              oldVariances.m,
+              oldVariances.memStep.map(projector.projectBackward),
+              oldVariances.memGradDelta.map(projector.projectBackward))
             val newCoefficients = Coefficients(
               projector.projectBackward(oldCoefficients.means),
-              oldCoefficients.variancesOption.map(projector.projectBackward))
+              newVariances)
 
             model.updateCoefficients(newCoefficients)
           }

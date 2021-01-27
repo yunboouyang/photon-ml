@@ -32,4 +32,5 @@ protected[optimization] case class OptimizerState(
     coefficients: Vector[Double],
     loss: Double,
     gradient: Vector[Double],
-    iter: Int)
+    iter: Int,
+    approximateHessian: ApproximateHessian[Vector[Double]] = ApproximateHessian[Vector[Double]]())

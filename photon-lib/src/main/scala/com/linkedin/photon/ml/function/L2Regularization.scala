@@ -178,43 +178,10 @@ trait L2RegularizationTwiceDiff extends TwiceDiffFunction with L2RegularizationD
       l2RegHessianVector(convertToVector(multiplyVector))
 
   /**
-   * Compute the diagonal of the Hessian matrix for the function with L2 regularization over the given data for the
-   * given model coefficients.
-   *
-   * @param input The given data over which to compute the diagonal of the Hessian matrix
-   * @param coefficients The model coefficients used to compute the diagonal of the Hessian matrix
-   * @return The computed diagonal of the Hessian matrix
-   */
-  abstract override protected[ml] def hessianDiagonal(input: Data, coefficients: Coefficients): Vector[Double] =
-    super.hessianDiagonal(input, coefficients) + l2RegHessianDiagonal
-
-  /**
-   * Compute the Hessian matrix for the function with L2 regularization over the given data for the given model
-   * coefficients.
-   *
-   * @param input The given data over which to compute the diagonal of the Hessian matrix
-   * @param coefficients The model coefficients used to compute the diagonal of the Hessian matrix
-   * @return The computed Hessian matrix
-   */
-  abstract override protected[ml] def hessianMatrix(input: Data, coefficients: Coefficients): DenseMatrix[Double] = {
-
-    val hessianMatrix = super.hessianMatrix(input, coefficients)
-
-    hessianMatrix + l2RegHessianDiagonal * DenseMatrix.eye[Double](hessianMatrix.rows)
-  }
-
-  /**
    * Compute the Hessian vector of the L2 regularization term for the given Hessian multiplication vector.
    *
    * @param multiplyVector The Hessian multiplication vector
    * @return The Heassian vector of the L2 regularization term
    */
   protected def l2RegHessianVector(multiplyVector: Vector[Double]): Vector[Double] = multiplyVector * l2RegWeight
-
-  /**
-   * Compute the Hessian diagonal of the L2 regularization term.
-   *
-   * @return The Hessian diagonal of the L2 regularization term
-   */
-  protected def l2RegHessianDiagonal: Double = l2RegWeight
 }

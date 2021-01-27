@@ -76,33 +76,6 @@ protected[ml] class DistributedOptimizationProblem[Objective <: DistributedObjec
   }
 
   /**
-   * Compute coefficient variances (if enabled). Full Hessian matrix will be output if variance computation type is
-   * set to be FULL. For other variance computation type, NONE will be output.
-   *
-   * @param input The training data
-   * @param coefficients The feature coefficients means
-   * @return An optional feature coefficient variances vector
-   */
-  override def computeVariances(input: RDD[LabeledPoint], coefficients: Vector[Double]): Option[Matrix[Double]] = {
-
-    val broadcastCoefficients = input.sparkContext.broadcast(coefficients)
-
-    val result = (objectiveFunction, varianceComputation) match {
-
-      case (twiceDiffFunc: TwiceDiffFunction, VarianceComputationType.FULL) =>
-        val hessianMatrix = twiceDiffFunc.hessianMatrix(input, broadcastCoefficients)
-        Some(hessianMatrix)
-
-      case _ =>
-        None
-    }
-
-    broadcastCoefficients.unpersist()
-
-    result
-  }
-
-  /**
    * Run the algorithm with the configured parameters, starting from an initial model of all-0 coefficients
    * (cold start in iterations over the regularization weights for hyperparameter tuning).
    *
@@ -123,10 +96,9 @@ protected[ml] class DistributedOptimizationProblem[Objective <: DistributedObjec
   override def run(input: RDD[LabeledPoint], initialModel: GeneralizedLinearModel): GeneralizedLinearModel = {
 
     val normalizationContext = optimizer.getNormalizationContext
-    val (optimizedCoefficients, _) = optimizer.optimize(objectiveFunction, initialModel.coefficients.means)(input)
-    val optimizedVariances = computeVariances(input, optimizedCoefficients)
+    val (optimizedCoefficients, _, approximateHessian) = optimizer.optimize(objectiveFunction, initialModel.coefficients.means)(input)
 
-    createModel(normalizationContext, optimizedCoefficients, optimizedVariances)
+    createModel(normalizationContext, optimizedCoefficients, approximateHessian)
   }
 
   /**

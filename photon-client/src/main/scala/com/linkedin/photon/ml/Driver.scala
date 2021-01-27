@@ -361,7 +361,7 @@ protected[ml] class Driver(
           val perIterationMetrics = optimizationStatesTracker
             .getTrackedStates
             .map { optimizerState =>
-              val model = glm.updateCoefficients(Coefficients(optimizerState.coefficients, None))
+              val model = glm.updateCoefficients(Coefficients(optimizerState.coefficients, optimizerState.approximateHessian))
               val metrics = Evaluation.evaluate(model, validationData)
 
               metrics

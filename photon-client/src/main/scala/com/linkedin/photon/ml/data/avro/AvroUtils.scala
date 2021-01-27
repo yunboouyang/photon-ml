@@ -21,7 +21,6 @@ import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.reflect.ClassTag
-
 import breeze.linalg.{CSCMatrix, DenseMatrix, DenseVector, Matrix, SparseVector, Vector}
 import org.apache.avro.Schema
 import org.apache.avro.Schema.Parser
@@ -36,8 +35,11 @@ import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
 import com.linkedin.photon.avro.generated._
+import com.linkedin.photon.avro.generated.BayesianLinearModelApproximateFullMatrixAvro
+import com.linkedin.photon.avro.generated.IndexedNameTermValueAvro
 import com.linkedin.photon.ml.index.{DefaultIndexMap, DefaultIndexMapLoader, IndexMap, IndexMapLoader}
 import com.linkedin.photon.ml.model.Coefficients
+import com.linkedin.photon.ml.optimization.ApproximateHessian
 import com.linkedin.photon.ml.supervised.model.GeneralizedLinearModel
 import com.linkedin.photon.ml.util._
 
@@ -318,6 +320,78 @@ object AvroUtils {
 
     }
 
+
+  /**
+   * Convert the matrix of type [[ApproximateHessian]] to two arrays of Avro records of type [[IndexedNameTermValueAvro]].
+   *
+   * @param matrix The input matrix
+   * @param featureMap A map of feature index of type [[Int]] to feature name of type [[NameAndTerm]]
+   * @param sparsityThreshold The model sparsity threshold, or the minimum absolute value considered nonzero
+   * @return An array of Avro records that contains the information of the input matrix
+   */
+  protected[avro] def convertApproximateHessianAsArraiesOfIndexedNameTermValueAvros(
+    matrix: ApproximateHessian[Vector[Double]],
+    featureMap: IndexMap,
+    sparsityThreshold: Double = VectorUtils.DEFAULT_SPARSITY_THRESHOLD): (Array[IndexedNameTermValueAvro], Array[IndexedNameTermValueAvro]) = {
+
+    val memStepAvro = matrix.memStep.toArray.zipWithIndex.map {
+      case (step, index) =>
+        val nameTermValueAvroList = step
+          .toArray
+          .zipWithIndex
+          .map(_.swap)
+          .filter { case (_, value) =>
+            math.abs(value) > sparsityThreshold
+          }
+          .sortWith((p1, p2) => math.abs(p1._2) > math.abs(p2._2))
+          .map {
+            case (i, value) =>
+              featureMap.getFeatureName(i) match {
+                case Some(featureKey: String) =>
+                  val name = Utils.getFeatureNameFromKey(featureKey)
+                  val term = Utils.getFeatureTermFromKey(featureKey)
+
+                  NameTermValueAvro.newBuilder().setName(name).setTerm(term).setValue(value).build()
+
+                case None =>
+                  throw new NoSuchElementException(s"Feature index $i not found in the feature map")
+              }
+          }
+          .toList
+        IndexedNameTermValueAvro.newBuilder().setIndex(index).setVector(nameTermValueAvroList.asJava).build()
+    }
+
+    val memGradDeltaAvro = matrix.memGradDelta.toArray.zipWithIndex.map {
+      case (step, index) =>
+        val nameTermValueAvroList = step
+          .toArray
+          .zipWithIndex
+          .map(_.swap)
+          .filter { case (_, value) =>
+            math.abs(value) > sparsityThreshold
+          }
+          .sortWith((p1, p2) => math.abs(p1._2) > math.abs(p2._2))
+          .map {
+            case (i, value) =>
+              featureMap.getFeatureName(i) match {
+                case Some(featureKey: String) =>
+                  val name = Utils.getFeatureNameFromKey(featureKey)
+                  val term = Utils.getFeatureTermFromKey(featureKey)
+
+                  NameTermValueAvro.newBuilder().setName(name).setTerm(term).setValue(value).build()
+
+                case None =>
+                  throw new NoSuchElementException(s"Feature index $i not found in the feature map")
+            }
+          }
+          .toList
+        IndexedNameTermValueAvro.newBuilder().setIndex(index).setVector(nameTermValueAvroList.asJava).build()
+    }
+
+    (memStepAvro, memGradDeltaAvro)
+  }
+
+
   /**
    * Read the nameAndTerm of type [[NameAndTerm]] from Avro record of type [[GenericRecord]].
    *
@@ -407,50 +481,44 @@ object AvroUtils {
       model: GeneralizedLinearModel,
       modelId: String,
       featureMap: IndexMap,
-      sparsityThreshold: Double = VectorUtils.DEFAULT_SPARSITY_THRESHOLD): BayesianLinearModelFullMatrixAvro = {
+      sparsityThreshold: Double = VectorUtils.DEFAULT_SPARSITY_THRESHOLD): BayesianLinearModelApproximateFullMatrixAvro = {
 
     val modelCoefficients = model.coefficients
     val meansAvros = convertVectorAsArrayOfNameTermValueAvros(modelCoefficients.means, featureMap, sparsityThreshold)
-    val variancesAvrosOption = modelCoefficients
-      .variancesOption
-      .map(convertMatrixAsArrayOfDoubleNameTermValueAvros(_, featureMap, sparsityThreshold))
+    val variancesAvros = convertApproximateHessianAsArraiesOfIndexedNameTermValueAvros(modelCoefficients.variances, featureMap, sparsityThreshold)
     // TODO: Output type of model.
-    val avroFile = BayesianLinearModelFullMatrixAvro
+    val avroFile = BayesianLinearModelApproximateFullMatrixAvro
       .newBuilder()
       .setModelId(modelId)
       .setModelClass(model.getClass.getName)
       .setLossFunction("")
       .setMeans(meansAvros.toList)
-
-    if (variancesAvrosOption.isDefined) {
-      avroFile.setVariances(variancesAvrosOption.get.toList)
-    }
+      .setMemStep(variancesAvros._1.toList)
+      .setMemGradDelta(variancesAvros._2.toList)
 
     avroFile.build()
   }
 
   /**
-   * Convert the Avro record of type [[BayesianLinearModelFullMatrixAvro]] to the model type [[GeneralizedLinearModel]].
+   * Convert the Avro record of type [[BayesianLinearModelApproximateFullMatrixAvro]] to the model type [[GeneralizedLinearModel]].
    *
-   * @param bayesianLinearModelFullMatrixAvro The input Avro record
+   * @param bayesianLinearModelApproximateFullMatrixAvro The input Avro record
    * @param featureMap The map from feature name of type [[NameAndTerm]] to feature index of type [[Int]]
    * @return The generalized linear model converted from the Avro record
    */
   protected[avro] def convertBayesianLinearModelFullMatrixAvroToGLM(
-      bayesianLinearModelFullMatrixAvro: BayesianLinearModelFullMatrixAvro,
+      bayesianLinearModelApproximateFullMatrixAvro: BayesianLinearModelApproximateFullMatrixAvro,
       featureMap: IndexMap): GeneralizedLinearModel = {
 
-    val meansAvros = bayesianLinearModelFullMatrixAvro.getMeans
-    val variancesAvros = bayesianLinearModelFullMatrixAvro.getVariances
-    val modelClass = bayesianLinearModelFullMatrixAvro.getModelClass.toString
+    val meansAvros = bayesianLinearModelApproximateFullMatrixAvro.getMeans
+    val memStepAvros = bayesianLinearModelApproximateFullMatrixAvro.getMemStep
+    val memGradDeltaAvros = bayesianLinearModelApproximateFullMatrixAvro.getMemGradDelta
+
+    val modelClass = bayesianLinearModelApproximateFullMatrixAvro.getModelClass.toString
 
     val means = convertNameTermValueAvroList(meansAvros, featureMap)
-    val coefficients = if (variancesAvros == null) {
-      Coefficients(means)
-    } else {
-      val variances = convertNameTermDoubleArrayValueAvroList(variancesAvros, featureMap)
-      Coefficients(means, Some(variances))
-    }
+    val variances = convertIndexedNameTermValueAvroList(memStepAvros, memGradDeltaAvros, featureMap)
+    val coefficients = Coefficients(means, variances)
 
     // Load and instantiate the model
     try {
@@ -464,6 +532,31 @@ object AvroUtils {
         throw new IllegalArgumentException(
           s"Error loading model: model class $modelClass couldn't be loaded. You may need to retrain the model.", e)
     }
+  }
+
+  /**
+   * Convert the NameTermValueAvro List of the type [[JList[NameTermValue]]] to Breeze vector of type [[Vector[Double]]].
+   *
+   * @param featureMap The map from feature name of type [[NameAndTerm]] to feature index of type [[Int]]
+   * @return Breeze vector of type [[Vector[Double]]]
+   */
+  protected[avro] def convertIndexedNameTermValueAvroList(
+    memStepAvros: JList[IndexedNameTermValueAvro],
+    memGradDeltaAvros: JList[IndexedNameTermValueAvro],
+    featureMap: IndexMap): ApproximateHessian[Vector[Double]] = {
+
+    val memStep = memStepAvros.map(x => (x.getIndex, x.getVector)).sortWith(_._1 > _._1)
+
+    val memGradDelta = memGradDeltaAvros.map(x => (x.getIndex, x.getVector)).sortWith(_._1 > _._1)
+    val m = memStep.head._1 + 1
+    var approximateHessian = ApproximateHessian[Vector[Double]](m = m)
+    for (i <- 0 until m) {
+      val memStepVec = convertNameTermValueAvroList(memStep(i)._2, featureMap)
+      val memGradDeltaVec = convertNameTermValueAvroList(memGradDelta(i)._2, featureMap)
+      approximateHessian = approximateHessian.updated(memStepVec, memGradDeltaVec)
+    }
+
+    approximateHessian
   }
 
   /**

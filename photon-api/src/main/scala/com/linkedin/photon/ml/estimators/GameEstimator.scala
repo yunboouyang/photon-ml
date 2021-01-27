@@ -281,11 +281,6 @@ class GameEstimator(val sc: SparkContext, implicit val logger: Logger) extends P
                 s"Incremental training error: feature shard ID mismatch for coordinate '$coordinateId' " +
                   s"('${fEC.featureShardId}' vs. '${fEM.featureShardId}').")
 
-              // Model must contain variance info
-              require(
-                fEM.model.coefficients.variancesOption.isDefined,
-                s"Incremental training error: coordinate '$coordinateId' missing variance information.")
-
             case (rEC: RandomEffectDataConfiguration, rEM: RandomEffectModel) =>
 
               // Model and coordinate must be trained on the same feature shard
@@ -300,15 +295,6 @@ class GameEstimator(val sc: SparkContext, implicit val logger: Logger) extends P
                 s"Incremental training error: random effect type mismatch for coordinate '$coordinateId' " +
                   s"('${rEC.randomEffectType}' vs. '${rEM.randomEffectType}').")
 
-              // Model must contain variance info
-              require(
-                rEM
-                  .modelsRDD
-                  .mapPartitions(
-                    iter => Seq(iter.forall(_._2.coefficients.variancesOption.isDefined)).iterator,
-                    preservesPartitioning = true)
-                  .fold(true)(_ && _),
-                s"Incremental training error: one or more models in coordinate '$coordinateId' missing variance information.")
 
             case (_, _) =>
               throw new IllegalArgumentException(

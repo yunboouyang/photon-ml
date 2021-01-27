@@ -27,7 +27,7 @@ import org.apache.spark.ml.param.ParamMap
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 
-import com.linkedin.photon.avro.generated.{BayesianLinearModelAvro, BayesianLinearModelFullMatrixAvro, FeatureSummarizationResultAvro}
+import com.linkedin.photon.avro.generated.{BayesianLinearModelApproximateFullMatrixAvro, FeatureSummarizationResultAvro}
 import com.linkedin.photon.ml.TaskType.TaskType
 import com.linkedin.photon.ml.Types.{CoordinateId, FeatureShardId}
 import com.linkedin.photon.ml.cli.game.training.GameTrainingDriver
@@ -317,7 +317,7 @@ object ModelProcessingUtils {
       sc,
       Seq(bayesianLinearModelAvro),
       modelOutputPath,
-      BayesianLinearModelFullMatrixAvro.getClassSchema.toString)
+      BayesianLinearModelApproximateFullMatrixAvro.getClassSchema.toString)
   }
 
   /**
@@ -332,9 +332,9 @@ object ModelProcessingUtils {
 
     val coefficientsPath = new Path(inputDir, AvroConstants.DEFAULT_AVRO_FILE_NAME).toString
     // next line is log reg
-    val linearModelAvroSchema = BayesianLinearModelFullMatrixAvro.getClassSchema.toString
+    val linearModelAvroSchema = BayesianLinearModelApproximateFullMatrixAvro.getClassSchema.toString
     // next line is lin reg - we lost the log reg information
-    val linearModelAvro = AvroUtils.readFromSingleAvro[BayesianLinearModelFullMatrixAvro](sc, coefficientsPath,
+    val linearModelAvro = AvroUtils.readFromSingleAvro[BayesianLinearModelApproximateFullMatrixAvro](sc, coefficientsPath,
       linearModelAvroSchema).head
 
     // We wrap the feature index in a loader to be more consistent with loadModelsRDDFromHDFS
@@ -362,7 +362,7 @@ object ModelProcessingUtils {
       }
     }
 
-    AvroUtils.saveAsAvro(linearModelAvro, outputDir, BayesianLinearModelFullMatrixAvro.getClassSchema.toString)
+    AvroUtils.saveAsAvro(linearModelAvro, outputDir, BayesianLinearModelApproximateFullMatrixAvro.getClassSchema.toString)
   }
 
   /**
@@ -380,7 +380,7 @@ object ModelProcessingUtils {
       indexMapLoader: IndexMapLoader,
       sc: SparkContext): RDD[(String, GeneralizedLinearModel)] = {
 
-    val modelAvros = AvroUtils.readAvroFilesInDir[BayesianLinearModelFullMatrixAvro](
+    val modelAvros = AvroUtils.readAvroFilesInDir[BayesianLinearModelApproximateFullMatrixAvro](
       sc,
       coefficientsRDDInputDir,
       minNumPartitions = sc.defaultParallelism)

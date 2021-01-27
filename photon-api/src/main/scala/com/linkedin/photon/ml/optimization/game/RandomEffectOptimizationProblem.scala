@@ -17,13 +17,12 @@ package com.linkedin.photon.ml.optimization.game
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
-
 import com.linkedin.photon.ml.Types.REId
 import com.linkedin.photon.ml.function.SingleNodeObjectiveFunction
 import com.linkedin.photon.ml.model.{Coefficients, RandomEffectModel}
 import com.linkedin.photon.ml.normalization.NormalizationContext
 import com.linkedin.photon.ml.optimization.VarianceComputationType.VarianceComputationType
-import com.linkedin.photon.ml.optimization.{SingleNodeOptimizationProblem, VarianceComputationType}
+import com.linkedin.photon.ml.optimization.{ApproximateHessian, SingleNodeOptimizationProblem, VarianceComputationType}
 import com.linkedin.photon.ml.projector.LinearSubspaceProjector
 import com.linkedin.photon.ml.spark.RDDLike
 import com.linkedin.photon.ml.supervised.model.GeneralizedLinearModel
@@ -188,9 +187,15 @@ object RandomEffectOptimizationProblem {
         val projectedPriorModelOpt = priorModelOpt.map{
           model =>
             val oldCoefficients = model.coefficients
+            val oldVariances = oldCoefficients.variances
+            val newVariances = ApproximateHessian[breeze.linalg.Vector[Double]](
+              oldVariances.m,
+              oldVariances.memStep.map(projector.projectForward),
+              oldVariances.memGradDelta.map(projector.projectForward))
+
             val newCoefficients = Coefficients(
               projector.projectForward(oldCoefficients.means),
-              oldCoefficients.variancesOption.map(projector.projectForward))
+              newVariances)
 
             model.updateCoefficients(newCoefficients)
         }

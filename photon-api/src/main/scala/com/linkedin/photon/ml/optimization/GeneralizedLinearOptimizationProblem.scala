@@ -62,7 +62,7 @@ protected[ml] abstract class GeneralizedLinearOptimizationProblem[Objective <: O
    * @param variances The feature coefficient variances
    * @return A GLM with the provided feature coefficients
    */
-  protected def createModel(coefficients: Vector[Double], variances: Option[Matrix[Double]]): GeneralizedLinearModel =
+  protected def createModel(coefficients: Vector[Double], variances: ApproximateHessian[Vector[Double]]): GeneralizedLinearModel =
     glmConstructor(Coefficients(coefficients, variances))
 
   /**
@@ -76,20 +76,11 @@ protected[ml] abstract class GeneralizedLinearOptimizationProblem[Objective <: O
   protected def createModel(
       normalizationContext: BroadcastWrapper[NormalizationContext],
       coefficients: Vector[Double],
-      variances: Option[Matrix[Double]]): GeneralizedLinearModel =
-  // need to check
+      variances: ApproximateHessian[Vector[Double]]): GeneralizedLinearModel =
+    // TODO: normalization
     createModel(
       normalizationContext.value.modelToOriginalSpace(coefficients),
-      variances.map(normalizationContext.value.varianceToOriginalSpace))
-
-  /**
-   * Compute coefficient variances
-   *
-   * @param input The training data
-   * @param coefficients The feature coefficients means
-   * @return The feature coefficient variances
-   */
-  def computeVariances(input: objectiveFunction.Data, coefficients: Vector[Double]): Option[Matrix[Double]]
+      variances)
 
   /**
    * Run the optimization algorithm on the input data, starting from an initial model of all-0 coefficients.

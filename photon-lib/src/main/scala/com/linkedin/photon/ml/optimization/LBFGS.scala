@@ -69,7 +69,8 @@ class LBFGS(
           OptimizationUtils.projectCoefficientsToSubspace(breezeState.x, constraintMap),
           breezeState.adjustedValue,
           breezeState.adjustedGradient,
-          state.iter + 1)
+          state.iter + 1,
+          state.approximateHessian.updated(breezeState.adjustedValue - state.coefficients, breezeState.adjustedGradient -:- state.gradient))
 
       } else {
         // LBFGS is converged

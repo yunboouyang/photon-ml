@@ -102,7 +102,7 @@ protected[ml] class OptimizationStatesTracker(maxNumStates: Int = 100) extends S
     stringBuilder ++= f"$ITERATIONS%10s$TIME%10s$VALUE%25s$GRADIENT_NORM%15s\n"
     stringBuilder ++= states
       .zip(timeElapsed)
-      .map { case (OptimizerState(_, value, gradient, iter), time) =>
+      .map { case (OptimizerState(_, value, gradient, iter, _), time) =>
         f"$iter%10d${time * 0.001}%10.3f$value%25.8f${norm(gradient, 2)}%15.2e"
       }
       .mkString("\n")

@@ -48,24 +48,6 @@ protected[ml] class SingleNodeOptimizationProblem[Objective <: SingleNodeObjecti
     varianceComputationType)
   with Serializable {
 
-  /**
-   * Compute coefficient variances (if enabled). Full Hessian matrix will be output if variance computation type is
-   * set to be FULL. For other variance computation type, NONE will be output.
-   *
-   * @param input The training data
-   * @param coefficients The feature coefficients means
-   * @return An optional feature coefficient variances vector
-   */
-  override def computeVariances(input: Iterable[LabeledPoint], coefficients: Vector[Double]): Option[DenseMatrix[Double]] =
-    (objectiveFunction, varianceComputationType) match {
-
-      case (twiceDiffFunc: TwiceDiffFunction, VarianceComputationType.FULL) =>
-        val hessianMatrix = twiceDiffFunc.hessianMatrix(input, coefficients)
-        Some(hessianMatrix)
-
-      case _ =>
-        None
-    }
 
   /**
    * Run the optimization algorithm on the input data, starting from an initial model of all-0 coefficients.
@@ -86,10 +68,9 @@ protected[ml] class SingleNodeOptimizationProblem[Objective <: SingleNodeObjecti
   override def run(input: Iterable[LabeledPoint], initialModel: GeneralizedLinearModel): GeneralizedLinearModel = {
 
     val normalizationContext = optimizer.getNormalizationContext
-    val (optimizedCoefficients, _) = optimizer.optimize(objectiveFunction, initialModel.coefficients.means)(input)
-    val optimizedVariances = computeVariances(input, optimizedCoefficients)
+    val (optimizedCoefficients, _, approximateHessian) = optimizer.optimize(objectiveFunction, initialModel.coefficients.means)(input)
 
-    createModel(normalizationContext, optimizedCoefficients, optimizedVariances)
+    createModel(normalizationContext, optimizedCoefficients, approximateHessian)
   }
 }
 

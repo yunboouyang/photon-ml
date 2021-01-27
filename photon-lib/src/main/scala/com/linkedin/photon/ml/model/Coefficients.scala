@@ -14,10 +14,10 @@
  */
 package com.linkedin.photon.ml.model
 
-import breeze.linalg.{Vector, Matrix, norm}
+import breeze.linalg.{Vector, norm}
 import breeze.stats.meanAndVariance
-
 import com.linkedin.photon.ml.constants.MathConst
+import com.linkedin.photon.ml.optimization.{ApproximateHessian, LBFGS}
 import com.linkedin.photon.ml.util.{MathUtils, Summarizable, VectorUtils}
 
 /**
@@ -26,15 +26,13 @@ import com.linkedin.photon.ml.util.{MathUtils, Summarizable, VectorUtils}
  * @note Breeze's SparseVector does NOT sort the non-zeros in order of increasing index, but still supports a get/set
  *       backed by a binary search (11/18/2016)
  * @param means The mean of the model coefficients
- * @param variancesOption Optional variance of the model coefficients
+ * @param variances Optional variance of the model coefficients
  */
-case class Coefficients(means: Vector[Double], variancesOption: Option[Matrix[Double]] = None)
+case class Coefficients(means: Vector[Double], variances: ApproximateHessian[Vector[Double]])
   extends Summarizable {
 
   // GAME over if variances are given but don't have the same length as the vector of means
-  require(
-    variancesOption.isEmpty || variancesOption.get.rows == means.length || variancesOption.get.cols == means.length,
-    "Coefficients: Means and variances have different lengths")
+  require(variances.memStep.head.length == means.length, "Coefficients: Means and variances have different lengths")
 
   def length: Int = means.length
 
@@ -68,7 +66,6 @@ case class Coefficients(means: Vector[Double], variancesOption: Option[Matrix[Do
     val meanAndVar = meanAndVariance(means)
 
     sb.append(s"Type: ${if (isDense) "dense" else "sparse"}, ")
-    sb.append(s"length: $length, ${if (variancesOption.isDefined) "with variances" else "without variances" }\n")
     if (!isDense) {
       sb.append(s"Number of declared non-zeros: ${means.activeSize}\n")
       sb.append(
@@ -100,17 +97,11 @@ case class Coefficients(means: Vector[Double], variancesOption: Option[Matrix[Do
    */
   override def equals(that: Any): Boolean = that match {
     case other: Coefficients =>
-      val (m1, v1, m2, v2) = (this.means, this.variancesOption, other.means, other.variancesOption)
-      val sameType = (m1.getClass == m2.getClass) && (v1.map(_.getClass) == v2.map(_.getClass))
+      val (m1, v1, m2, v2) = (this.means, this.variances, other.means, other.variances)
+      val sameType = (m1.getClass == m2.getClass) && v1.getClass == v2.getClass
       lazy val sameMeans = VectorUtils.areAlmostEqual(m1, m2)
-      lazy val sameVariance = (v1, v2) match {
-        case (None, None) => true
 
-        case (Some(val1), Some(val2)) => VectorUtils.matrixAlmostEqual(val1, val2)
-        case (_, _) => false
-      }
-
-      sameType && sameMeans && sameVariance
+      sameType && sameMeans
 
     case _ => false
   }
@@ -134,5 +125,5 @@ protected[ml] object Coefficients {
    * @return Zero coefficient vector
    */
   def initializeZeroCoefficients(dimension: Int): Coefficients =
-    Coefficients(Vector.zeros[Double](dimension), variancesOption = None)
+    Coefficients(Vector.zeros[Double](dimension), variances = ApproximateHessian[Vector[Double]]())
 }

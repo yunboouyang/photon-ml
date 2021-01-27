@@ -21,5 +21,5 @@ object VarianceComputationType extends Enumeration {
 
   type VarianceComputationType = Value
 
-  val NONE, SIMPLE, FULL = Value
+  val NONE, SIMPLE, FULL, APPROXIMATE_FULL = Value
 }

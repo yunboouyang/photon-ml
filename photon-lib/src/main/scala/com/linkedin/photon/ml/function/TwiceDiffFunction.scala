@@ -15,8 +15,8 @@
 package com.linkedin.photon.ml.function
 
 import breeze.linalg.{DenseMatrix, Vector}
-
 import com.linkedin.photon.ml.normalization.NormalizationContext
+import com.linkedin.photon.ml.optimization.ApproximateHessian
 import com.linkedin.photon.ml.util.BroadcastWrapper
 
 /**
@@ -41,22 +41,4 @@ trait TwiceDiffFunction extends DiffFunction {
     coefficients: Coefficients,
     multiplyVector: Coefficients,
     normalizationContext: BroadcastWrapper[NormalizationContext]): Vector[Double]
-
-  /**
-   * Compute the diagonal of the Hessian matrix over the given data for the given model coefficients.
-   *
-   * @param input The given data over which to compute the diagonal of the Hessian matrix
-   * @param coefficients The model coefficients used to compute the diagonal of the Hessian matrix
-   * @return The computed diagonal of the Hessian matrix
-   */
-  protected[ml] def hessianDiagonal(input: Data, coefficients: Coefficients): Vector[Double]
-
-  /**
-   * Compute the Hessian matrix over the given data for the given model coefficients.
-   *
-   * @param input The given data over which to compute the diagonal of the Hessian matrix
-   * @param coefficients The model coefficients used to compute the diagonal of the Hessian matrix
-   * @return The computed Hessian matrix
-   */
-  protected[ml] def hessianMatrix(input: Data, coefficients: Coefficients): DenseMatrix[Double]
 }

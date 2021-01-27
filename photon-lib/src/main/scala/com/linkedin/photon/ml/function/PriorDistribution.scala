@@ -17,6 +17,7 @@ package com.linkedin.photon.ml.function
 import breeze.linalg.{DenseMatrix, DenseVector, Matrix, Vector, diag}
 import com.linkedin.photon.ml.normalization.NormalizationContext
 import com.linkedin.photon.ml.model.{Coefficients => ModelCoefficients}
+import com.linkedin.photon.ml.optimization.{ApproximateHessian, LBFGS}
 import com.linkedin.photon.ml.util.{BroadcastWrapper, VectorUtils}
 
 /**
@@ -26,10 +27,10 @@ import com.linkedin.photon.ml.util.{BroadcastWrapper, VectorUtils}
  */
 trait PriorDistribution extends ObjectiveFunction {
 
-  val priorCoefficients: ModelCoefficients = ModelCoefficients(DenseVector.zeros(1), Some(DenseMatrix.eye[Double](1)))
+  val priorCoefficients: ModelCoefficients = ModelCoefficients(DenseVector.zeros(1), ApproximateHessian[Vector[Double]]())
 
   lazy protected val priorMeans: Vector[Double] = priorCoefficients.means
-  lazy protected val inversePriorVariances: DenseMatrix[Double] = VectorUtils.expandMatrix(priorCoefficients.variancesOption.get)
+  lazy protected val inversePriorVariances: ApproximateHessian[Vector[Double]] = priorCoefficients.variances
   protected var l2RegWeight: Double = 0D
 
   require(l2RegWeight >= 0D, s"Invalid regularization weight '$l2RegWeight")
@@ -67,7 +68,7 @@ trait PriorDistribution extends ObjectiveFunction {
   protected def l2RegValue(coefficients: Vector[Double]): Double = {
 
     val diff = (coefficients - priorMeans).toDenseVector
-    val weightedPenalty = diff.t * inversePriorVariances * diff
+    val weightedPenalty = diff.t * (inversePriorVariances  * diff)
 
     l2RegWeight * weightedPenalty / 2
   }
@@ -166,28 +167,6 @@ trait PriorDistributionTwiceDiff extends TwiceDiffFunction with PriorDistributio
       l2RegHessianVector(convertToVector(multiplyVector))
 
   /**
-   * Compute the Hessian diagonal of the objective function over the given data for the given model coefficients, with
-   * regularization towards the prior coefficients.
-   *
-   * @param input The data over which to compute the Hessian diagonal
-   * @param coefficients The model coefficients for which to compute the objective function's Hessian diagonal
-   * @return The Hessian diagonal of the objective function and regularization terms
-   */
-  abstract override protected[ml] def hessianDiagonal(input: Data, coefficients: Coefficients): Vector[Double] =
-    super.hessianDiagonal(input, coefficients) :+ l2RegHessianDiagonal
-
-  /**
-   * Compute the Hessian matrix of the objective function over the given data for the given model coefficients, with
-   * regularization towards the prior coefficients.
-   *
-   * @param input The data over which to compute the Hessian matrix
-   * @param coefficients The model coefficients for which to compute the objective function's Hessian matrix
-   * @return The Hessian matrix of the objective function and regularization terms
-   */
-  abstract override protected[ml] def hessianMatrix(input: Data, coefficients: Coefficients): DenseMatrix[Double] =
-    super.hessianMatrix(input, coefficients) + l2RegHessianMatrix
-
-  /**
    * Compute the Hessian diagonal * gradient direction of the Gaussian regularization term for the given model
    * coefficients.
    *
@@ -195,20 +174,5 @@ trait PriorDistributionTwiceDiff extends TwiceDiffFunction with PriorDistributio
    * @return The Hessian diagonal of the Gaussian regularization term, with gradient direction vector
    */
   protected def l2RegHessianVector(multiplyVector: Vector[Double]): Vector[Double] =
-    l2RegWeight * inversePriorVariances * multiplyVector
-
-  /**
-   * Compute the Hessian diagonal of the Gaussian regularization term for the given model coefficients. Hessian
-   * diagonal is l2RegWeight :/ priorVariance.
-   *
-   * @return The Hessian diagonal of the Gaussian regularization term
-   */
-  protected def l2RegHessianDiagonal: Vector[Double] = l2RegWeight * diag(inversePriorVariances)
-
-  /**
-   * Compute the Hessian matrix of the Gaussian regularization term for the given model coefficients.
-   *
-   * @return The Hessian matrix of the Gaussian regularization term
-   */
-  protected def l2RegHessianMatrix: DenseMatrix[Double] = l2RegWeight * inversePriorVariances
+    l2RegWeight * (inversePriorVariances * multiplyVector)
 }
