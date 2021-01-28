@@ -65,12 +65,13 @@ class LBFGS(
       if (breezeStates.hasNext) {
         val breezeState = breezeStates.next()
         // Project coefficients into constrained space, if any, before updating the state
+        val newCoeffcients = OptimizationUtils.projectCoefficientsToSubspace(breezeState.x, constraintMap)
         OptimizerState(
-          OptimizationUtils.projectCoefficientsToSubspace(breezeState.x, constraintMap),
+          newCoeffcients,
           breezeState.adjustedValue,
           breezeState.adjustedGradient,
           state.iter + 1,
-          state.approximateHessian.updated(breezeState.adjustedValue - state.coefficients, breezeState.adjustedGradient -:- state.gradient))
+          state.approximateHessian.updated(newCoeffcients - state.coefficients, breezeState.adjustedGradient -:- state.gradient))
 
       } else {
         // LBFGS is converged
